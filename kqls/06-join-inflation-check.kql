@@ -1,0 +1,24 @@
+// Measures how badly the watchlist join inflates counts, per IP.
+//
+// This is the query that surfaced the problem. Any row where MatchedRows is
+// higher than RawRows is an IP matching multiple overlapping ranges. Empty
+// result means the watchlist resolves cleanly and 04/05 aren't needed.
+//
+// Worth running against any enrichment table before trusting counts from it.
+
+let GeoIPDB = _GetWatchlist("geoip");
+let RawRows =
+    SecurityEvent
+    | where EventID == 4625
+    | summarize RawRows = count() by IpAddress;
+let JoinedRows =
+    SecurityEvent
+    | where EventID == 4625
+    | evaluate ipv4_lookup(GeoIPDB, IpAddress, network)
+    | summarize MatchedRows = count() by IpAddress;
+RawRows
+| join kind=inner (JoinedRows) on IpAddress
+| where MatchedRows != RawRows
+| extend Inflation = round(todouble(MatchedRows) / RawRows, 1)
+| project IpAddress, RawRows, MatchedRows, Inflation
+| order by Inflation desc

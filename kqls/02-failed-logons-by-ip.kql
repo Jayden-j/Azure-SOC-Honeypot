@@ -1,0 +1,8 @@
+// 02 - Failed logon attempts grouped by source IP
+// Counts brute-force attempts per attacker, sorted by volume.
+// Useful for spotting the most aggressive single sources.
+
+SecurityEvent
+| where EventID == 4625
+| summarize Attempts = count() by IpAddress
+| sort by Attempts desc

@@ -1,0 +1,21 @@
+// 03 - Geo-enrichment of attacker IPs
+// Resolves each attacker's IP address to a physical location using the
+// "geoip" watchlist (IP-range -> lat/long/city/country mapping) and the
+// ipv4_lookup plugin.
+//
+// Prerequisite: a watchlist named "geoip" (alias must match exactly) with
+// search key "network", containing columns: network, latitude, longitude,
+// cityname, countryname.
+
+let GeoIPDB = _GetWatchlist("geoip");
+SecurityEvent
+| where EventID == 4625
+| order by TimeGenerated desc
+| evaluate ipv4_lookup(GeoIPDB, IpAddress, network)
+| project TimeGenerated,
+          Computer,
+          AttackerIP = IpAddress,
+          cityname,
+          countryname,
+          latitude,
+          longitude

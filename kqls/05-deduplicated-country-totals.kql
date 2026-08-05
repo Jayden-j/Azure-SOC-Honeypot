@@ -1,0 +1,27 @@
+// Country totals, corrected for overlapping ranges in the geoip watchlist.
+//
+// Joining SecurityEvent through ipv4_lookup can match one attacker IP against
+// several network blocks, duplicating rows and inflating counts by 2-3x. One IP
+// here showed 3,359 raw events and 10,077 after a naive join.
+//
+// The fix is ordering: count first, resolve location second, join last. Raw
+// counts never touch the watchlist, so they can't fan out, and each IP carries
+// exactly one location into the join.
+//
+// Produces the figures in the README findings table.
+
+let GeoIPDB = _GetWatchlist("geoip");
+let RawCounts =
+    SecurityEvent
+    | where EventID == 4625
+    | summarize Attempts = count() by IpAddress;
+let GeoDedup =
+    SecurityEvent
+    | where EventID == 4625
+    | distinct IpAddress
+    | evaluate ipv4_lookup(GeoIPDB, IpAddress, network)
+    | summarize take_any(countryname) by IpAddress;
+RawCounts
+| join kind=inner (GeoDedup) on IpAddress
+| summarize TotalAttempts = sum(Attempts) by countryname
+| order by TotalAttempts desc

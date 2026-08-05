@@ -1,0 +1,9 @@
+// 01 - Failed logon events (Event ID 4625)
+// Isolates Windows failed-logon events forwarded from the honeypot VM.
+// 4625 = "An account failed to log on" — the core attack signal for this lab.
+
+SecurityEvent
+| where EventID == 4625
+| where TimeGenerated > ago(1h)
+| project TimeGenerated, Account, Computer, IpAddress, Activity
+| order by TimeGenerated desc

@@ -1,0 +1,31 @@
+// 04 - Attack map aggregation query (corrected for the watchlist fan-out)
+//
+// Powers the Sentinel workbook map. Aggregates failed-logon volume per
+// location so the map can size/color each point by attack volume.
+//
+// IMPORTANT: the naive version of this query (count() straight through
+// ipv4_lookup) over-counts, because the geoip watchlist has overlapping
+// IP ranges and a single IP matches more than one row -- inflating the
+// map totals by 10-20x. This version resolves each IP to exactly one
+// location FIRST (take_any), then joins that back to the raw per-IP
+// counts, so every real event is counted once.
+//
+// Workbook Map Settings:
+//   Location info using:  Latitude/Longitude  -> latitude / longitude
+//   Metric value:          FailedAttempts
+//   Metric label:          FriendlyLocation
+
+let GeoIPDB = _GetWatchlist("geoip");
+let RawCounts = SecurityEvent
+    | where EventID == 4625
+    | summarize FailedAttempts = count() by IpAddress;
+let GeoDedup = SecurityEvent
+    | where EventID == 4625
+    | distinct IpAddress
+    | evaluate ipv4_lookup(GeoIPDB, IpAddress, network)
+    | summarize take_any(cityname, countryname, latitude, longitude) by IpAddress;
+RawCounts
+| join kind=inner (GeoDedup) on IpAddress
+| summarize FailedAttempts = sum(FailedAttempts) by cityname, countryname, latitude, longitude
+| project FriendlyLocation = strcat(cityname, " (", countryname, ")"),
+          latitude, longitude, FailedAttempts
